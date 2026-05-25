@@ -10,6 +10,6 @@ LUCI_DESCRIPTION:=Run PROFINET scans from LuCI diagnostics style interface
 LUCI_DEPENDS:=+luci-base +luci-mod-network +pn-scanner
 LUCI_PKGARCH:=all
 
-include ../../luci.mk
+include $(TOPDIR)/feeds/luci/luci.mk
 
 # call BuildPackage - OpenWrt buildroot signature

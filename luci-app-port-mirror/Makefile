@@ -10,6 +10,6 @@ LUCI_DESCRIPTION:=Configure tc-based port mirror rules managed by port-mirror-sc
 LUCI_DEPENDS:=+luci-base +port-mirror-scripts
 LUCI_PKGARCH:=all
 
-include ../../luci.mk
+include $(TOPDIR)/feeds/luci/luci.mk
 
 # call BuildPackage - OpenWrt buildroot signature

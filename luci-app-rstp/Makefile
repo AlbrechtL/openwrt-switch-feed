@@ -11,6 +11,6 @@ LUCI_DESCRIPTION:=Configure and monitor bridge spanning tree settings backed by 
 LUCI_DEPENDS:=+luci-base +mstpd-ubus +rpcd-mod-ucode
 LUCI_PKGARCH:=all
 
-include ../../luci.mk
+include $(TOPDIR)/feeds/luci/luci.mk
 
 # call BuildPackage - OpenWrt buildroot signature

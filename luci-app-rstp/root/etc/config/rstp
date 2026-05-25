@@ -1,0 +1,19 @@
+# Bridge spanning tree configuration managed by luci-app-rstp.
+#
+# Example:
+# config bridge
+# 	option name 'br-lan'
+# 	option enabled '1'
+# 	option mode 'rstp'
+# 	option priority '32768'
+# 	option max_age '20'
+# 	option forward_delay '15'
+# 	option hello_time '2'
+# 	option hold_count '6'
+# 	option max_hops '20'
+#
+# config port
+# 	option bridge 'br-lan'
+# 	option port 'lan1'
+# 	option admin_edge_port '0'
+# 	option auto_edge_port '1'

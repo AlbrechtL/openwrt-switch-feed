@@ -1,0 +1,13 @@
+{
+	"admin/network/port-mirror": {
+		"title": "Port Mirroring",
+		"order": 95,
+		"action": {
+			"type": "view",
+			"path": "network/port-mirror"
+		},
+		"depends": {
+			"acl": [ "luci-app-port-mirror" ]
+		}
+	}
+}

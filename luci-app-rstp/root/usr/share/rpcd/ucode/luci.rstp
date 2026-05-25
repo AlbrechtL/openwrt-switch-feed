@@ -1,0 +1,350 @@
+#!/usr/bin/ucode
+
+'use strict';
+
+import { access, lsdir, readfile } from 'fs';
+import { connect } from 'ubus';
+import { cursor } from 'uci';
+
+const ubus = connect();
+
+const bridge_defaults = {
+	enabled: false,
+	mode: 'rstp',
+	priority: 32768,
+	max_age: 20,
+	forward_delay: 15,
+	hello_time: 2,
+	hold_count: 6,
+	max_hops: 20,
+	ageing_time: 300,
+};
+
+function read_trim(path) {
+	const data = readfile(path);
+	return (data != null) ? trim(data) : null;
+}
+
+function to_bool(value, def) {
+	if (value == null)
+		return def;
+
+	return value === true || value === 1 || value === '1';
+}
+
+function to_int(value, def) {
+	if (value == null || value === '')
+		return def;
+
+	const parsed = +value;
+	return (parsed != parsed) ? def : parsed;
+}
+
+function asString(value, def) {
+	if (value == null || value === '')
+		return def;
+
+	return sprintf('%s', value);
+}
+
+function state_label(state) {
+	switch (to_int(state, -1)) {
+	case 0:
+		return 'Disabled';
+	case 1:
+		return 'Discarding';
+	case 2:
+		return 'Learning';
+	case 3:
+		return 'Forwarding';
+	case 4:
+		return 'Discarding';
+	default:
+		return '-';
+	}
+}
+
+function mode_label(mode) {
+	switch (mode) {
+	case 'stp':
+		return 'STP';
+	case 'mstp':
+		return 'MSTP';
+	case 'rstp':
+	default:
+		return 'RSTP';
+	}
+}
+
+function call_ustp(method, payload) {
+	if (!ubus)
+		return null;
+
+	try {
+		return ubus.call('ustp', method, payload);
+	}
+	catch (e) {
+		return null;
+	}
+}
+
+function get_bridge_info_cached(bridge_name) {
+	const bridge_info = call_ustp('get_bridge_info', { name: bridge_name });
+
+	if (!bridge_info)
+		return null;
+
+	return {
+		is_root: !!bridge_info.is_root,
+		force_protocol_version: asString(bridge_info.force_protocol_version, null),
+		root_priority: to_int(bridge_info.root_priority, 0),
+		bridge_id: asString(bridge_info.bridge_id, '-'),
+		designated_root: asString(bridge_info.designated_root, '-'),
+		root_port: asString(bridge_info.root_port, null),
+		path_cost: to_int(bridge_info.path_cost, 0),
+		max_age: to_int(bridge_info.max_age, 0),
+		bridge_max_age: to_int(bridge_info.bridge_max_age, 0),
+		forward_delay: to_int(bridge_info.forward_delay, 0),
+		bridge_forward_delay: to_int(bridge_info.bridge_forward_delay, 0),
+		hello_time: to_int(bridge_info.hello_time, 0),
+		ageing_time: to_int(bridge_info.ageing_time, 0),
+		topology_change_count: to_int(bridge_info.topology_change_count, 0),
+		last_topology_change_port: asString(bridge_info.last_topology_change_port, null),
+		time_since_topology_change: to_int(bridge_info.time_since_topology_change, 0),
+	};
+}
+
+function get_port_list_cached(bridge_name) {
+	const port_list = call_ustp('get_port_list', { name: bridge_name });
+	const map = {};
+
+	if (!port_list?.ports)
+		return map;
+
+	for (let p in port_list.ports) {
+		if (!p?.port)
+			continue;
+
+		map[p.port] = p;
+	}
+
+	return map;
+}
+
+function read_saved_config() {
+	const uci = cursor();
+	const saved = {
+		bridges: {},
+		ports: {},
+	};
+
+	uci.foreach('rstp', 'bridge', (section) => {
+		if (!section.name)
+			return;
+
+		saved.bridges[section.name] = section;
+	});
+
+	uci.foreach('rstp', 'port', (section) => {
+		if (!section.bridge || !section.port)
+			return;
+
+		if (!(section.bridge in saved.ports))
+			saved.ports[section.bridge] = {};
+
+		saved.ports[section.bridge][section.port] = section;
+	});
+
+	uci.unload();
+
+	return saved;
+}
+
+function list_bridges() {
+	const bridges = [];
+
+	for (let dev in lsdir('/sys/class/net')) {
+		const brif = `/sys/class/net/${dev}/brif`;
+
+		if (!access(brif))
+			continue;
+
+		push(bridges, {
+			name: dev,
+			ports: lsdir(brif) || [],
+		});
+	}
+
+	return bridges;
+}
+
+function read_port_info(bridge_name, bridge_mode, port_name, saved_port, runtime_port) {
+	const info = {
+		name: port_name,
+		protocol: mode_label(bridge_mode),
+		state: runtime_port?.state || state_label(read_trim(`/sys/class/net/${port_name}/brport/state`)),
+		role: runtime_port?.role || '-',
+		path_cost: (runtime_port?.path_cost != null) ? `${runtime_port.path_cost}` : (read_trim(`/sys/class/net/${port_name}/brport/path_cost`) || '-'),
+		port_priority: (runtime_port?.port_priority != null) ? `${runtime_port.port_priority}` : (read_trim(`/sys/class/net/${port_name}/brport/priority`) || '-'),
+		admin_edge_port: to_bool(saved_port?.admin_edge_port, false),
+		auto_edge_port: to_bool(saved_port?.auto_edge_port, true),
+		oper_edge_port: (runtime_port?.oper_edge != null) ? !!runtime_port.oper_edge : null,
+		oper_p2p: (runtime_port?.oper_p2p != null) ? !!runtime_port.oper_p2p : false,
+	};
+
+	const ubus_status = call_ustp('get_port_status', {
+		bridge: bridge_name,
+		port: port_name,
+	});
+
+	if (ubus_status) {
+		if (ubus_status.protocol)
+			info.protocol = ubus_status.protocol;
+
+		if (ubus_status.state)
+			info.state = ubus_status.state;
+
+		if (ubus_status.role)
+			info.role = ubus_status.role;
+
+		if (ubus_status.external_port_path_cost != null)
+			info.path_cost = `${ubus_status.external_port_path_cost}`;
+
+		if (ubus_status.port_priority != null)
+			info.port_priority = `${ubus_status.port_priority}`;
+
+		if (ubus_status.admin_edge_port != null)
+			info.admin_edge_port = !!ubus_status.admin_edge_port;
+
+		if (ubus_status.auto_edge_port != null)
+			info.auto_edge_port = !!ubus_status.auto_edge_port;
+
+		if (ubus_status.oper_edge_port != null)
+			info.oper_edge_port = !!ubus_status.oper_edge_port;
+	}
+
+	return info;
+}
+
+function normalize_bridge(bridge, saved) {
+	const saved_bridge = saved.bridges[bridge.name] || {};
+	const saved_ports = saved.ports[bridge.name] || {};
+	const saved_mode = saved_bridge.mode || bridge_defaults.mode;
+	const bridge_info = get_bridge_info_cached(bridge.name) || {};
+	const runtime_mode = lc(bridge_info.force_protocol_version || '');
+	const mode = (runtime_mode == 'stp' || runtime_mode == 'rstp' || runtime_mode == 'mstp')
+		? runtime_mode
+		: saved_mode;
+	const ports = [];
+	const runtime_ports = get_port_list_cached(bridge.name);
+
+	for (let port_name in bridge.ports)
+		push(ports, read_port_info(bridge.name, mode, port_name, saved_ports[port_name], runtime_ports[port_name]));
+
+	return {
+		name: bridge.name,
+		config: {
+			enabled: to_bool(saved_bridge.enabled, bridge_defaults.enabled),
+			mode,
+			priority: to_int(saved_bridge.priority, bridge_defaults.priority),
+			max_age: to_int(saved_bridge.max_age, bridge_defaults.max_age),
+			forward_delay: to_int(saved_bridge.forward_delay, bridge_defaults.forward_delay),
+			hello_time: to_int(saved_bridge.hello_time, bridge_defaults.hello_time),
+			hold_count: to_int(saved_bridge.hold_count, bridge_defaults.hold_count),
+			max_hops: to_int(saved_bridge.max_hops, bridge_defaults.max_hops),
+			ageing_time: to_int(saved_bridge.ageing_time, bridge_defaults.ageing_time),
+		},
+		ports,
+		bridge_info,
+	};
+}
+
+function apply_bridge_config(name, config, ports) {
+	const warnings = [];
+	const bridge_payload = {
+		name,
+		proto: config?.mode || bridge_defaults.mode,
+		forward_delay: to_int(config?.forward_delay, bridge_defaults.forward_delay),
+		hello_time: to_int(config?.hello_time, bridge_defaults.hello_time),
+		max_age: to_int(config?.max_age, bridge_defaults.max_age),
+		ageing_time: to_int(config?.ageing_time, bridge_defaults.ageing_time),
+	};
+
+	if (config?.priority != null)
+		push(warnings, 'Bridge priority is stored in UCI but the current ustp ubus API does not expose a runtime setter for it yet.');
+
+	if (config?.hold_count != null)
+		push(warnings, 'Hold count is stored in UCI but the current ustp ubus API does not expose a runtime setter for it yet.');
+
+	if (config?.max_hops != null)
+		push(warnings, 'Max hops is stored in UCI but the current ustp ubus API does not expose a runtime setter for it yet.');
+
+	const added = call_ustp('add_bridge', bridge_payload);
+	const state = call_ustp('bridge_state', {
+		name,
+		enabled: !!config?.enabled,
+	});
+
+	for (let port in (ports || [])) {
+		call_ustp('set_port_config', {
+			bridge: name,
+			port: port.name,
+			admin_edge_port: !!port.admin_edge_port,
+			auto_edge_port: !!port.auto_edge_port,
+		});
+	}
+
+	return {
+		result: !!(added != null || state != null),
+		warnings,
+	};
+}
+
+const methods = {
+	get_overview: {
+		call: function() {
+			try {
+				const saved = read_saved_config();
+				const bridges = [];
+
+				for (let bridge in list_bridges())
+					push(bridges, normalize_bridge(bridge, saved));
+
+				return {
+					bridges,
+					apply_support: {
+						mode: true,
+						timers: true,
+						edge_port: true,
+						priority: false,
+						hold_count: false,
+						max_hops: false,
+					},
+				};
+			}
+			catch (e) {
+				return {
+					error: `get_overview exception: ${e}`,
+					bridges: [],
+					apply_support: {},
+				};
+			}
+		}
+	},
+
+	apply_bridge: {
+		args: {
+			name: '',
+			config: {},
+			ports: [],
+		},
+		call: function(request) {
+			if (!request.args?.name)
+				return { error: 'Missing bridge name' };
+
+			return apply_bridge_config(request.args.name, request.args.config || {}, request.args.ports || []);
+		}
+	}
+};
+
+return { 'luci.rstp': methods };

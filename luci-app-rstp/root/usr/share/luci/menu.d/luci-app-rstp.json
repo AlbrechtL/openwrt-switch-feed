@@ -1,0 +1,13 @@
+{
+	"admin/network/rstp": {
+		"title": "Spanning Tree",
+		"order": 96,
+		"action": {
+			"type": "view",
+			"path": "network/rstp"
+		},
+		"depends": {
+			"acl": [ "luci-app-rstp" ]
+		}
+	}
+}

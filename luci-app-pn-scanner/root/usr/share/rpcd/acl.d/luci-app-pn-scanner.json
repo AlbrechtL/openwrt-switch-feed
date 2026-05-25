@@ -1,0 +1,14 @@
+{
+	"luci-app-pn-scanner": {
+		"description": "Grant access to LuCI app pn-scanner",
+		"read": {
+			"file": {
+				"/usr/bin/pn_scanner": [ "exec", "list" ]
+			},
+			"ubus": {
+				"file": [ "exec", "stat" ],
+				"luci-rpc": [ "getNetworkDevices" ]
+			}
+		}
+	}
+}

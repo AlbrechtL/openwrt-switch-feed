@@ -1,0 +1,14 @@
+{
+	"luci-app-port-mirror": {
+		"description": "Grant access to LuCI app port mirror",
+		"read": {
+			"ubus": {
+				"luci-rpc": [ "getNetworkDevices" ]
+			},
+			"uci": [ "port-mirror" ]
+		},
+		"write": {
+			"uci": [ "port-mirror" ]
+		}
+	}
+}

@@ -1,0 +1,17 @@
+{
+	"luci-app-rstp": {
+		"description": "Grant access to LuCI app RSTP",
+		"read": {
+			"ubus": {
+				"luci.rstp": [ "get_overview" ]
+			},
+			"uci": [ "rstp" ]
+		},
+		"write": {
+			"ubus": {
+				"luci.rstp": [ "apply_bridge" ]
+			},
+			"uci": [ "rstp" ]
+		}
+	}
+}

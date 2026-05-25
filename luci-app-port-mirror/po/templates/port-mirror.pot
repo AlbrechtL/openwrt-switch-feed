@@ -1,0 +1,32 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Port Mirroring"
+msgstr ""
+
+msgid "Configure tc-based port mirroring rules. For best results, select switch or DSA user ports."
+msgstr ""
+
+msgid "Mirror Rules"
+msgstr ""
+
+msgid "Enable"
+msgstr ""
+
+msgid "Source interface"
+msgstr ""
+
+msgid "Target interface"
+msgstr ""
+
+msgid "Mirror ingress traffic"
+msgstr ""
+
+msgid "Mirror egress traffic"
+msgstr ""
+
+msgid "Backend constraints"
+msgstr ""
+
+msgid "Source and target must be different existing devices, at least one direction must be enabled, and only one enabled rule per source device is supported."
+msgstr ""

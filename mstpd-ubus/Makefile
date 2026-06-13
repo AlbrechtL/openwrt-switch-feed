@@ -7,7 +7,7 @@
 
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=mstpd
+PKG_NAME:=mstpd-ubus
 PKG_VERSION:=0.2.0
 PKG_RELEASE:=1
 

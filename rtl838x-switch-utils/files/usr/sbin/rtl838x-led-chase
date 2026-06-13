@@ -1,0 +1,62 @@
+#!/bin/sh
+
+LED_PATH="/sys/kernel/debug/rtl838x/led"
+
+if [ ! -d "$LED_PATH" ]; then
+	echo "rtl838x-led-chase: missing $LED_PATH" >&2
+	echo "rtl838x-led-chase: ensure debugfs is mounted and RTL838x LED debug nodes exist" >&2
+	exit 1
+fi
+
+if [ ! -w "$LED_PATH/led0_sw_p_en_ctrl" ] || [ ! -w "$LED_PATH/led1_sw_p_en_ctrl" ]; then
+	echo "rtl838x-led-chase: LED control files are not writable (run as root)" >&2
+	exit 1
+fi
+
+# Enable software control for LED groups.
+echo 0x0500ffff > "$LED_PATH/led0_sw_p_en_ctrl"
+echo 0x0500ffff > "$LED_PATH/led1_sw_p_en_ctrl"
+
+sleep_busy() {
+	j=0
+	while [ "$j" -lt 500 ]; do
+		j=$((j + 1))
+	done
+}
+
+while true; do
+	# Initialize all LEDs to OFF state.
+	for i in $(seq 0 15); do
+		echo 0x0 > "$LED_PATH/led_sw_p_ctrl.$(printf '%02d' "$i")"
+	done
+
+	# Switch on LEDs in a forward direction.
+	for i in $(seq 0 2 14); do
+		echo 0x5 > "$LED_PATH/led_sw_p_ctrl.$(printf '%02d' "$i")"
+		sleep_busy
+		echo 0x2d > "$LED_PATH/led_sw_p_ctrl.$(printf '%02d' "$i")"
+		sleep_busy
+	done
+
+	for i in $(seq 15 -2 1); do
+		echo 0x28 > "$LED_PATH/led_sw_p_ctrl.$(printf '%02d' "$i")"
+		sleep_busy
+		echo 0x2d > "$LED_PATH/led_sw_p_ctrl.$(printf '%02d' "$i")"
+		sleep_busy
+	done
+
+	# Switch off LEDs in a backward direction.
+	for i in $(seq 0 2 14); do
+		echo 0x28 > "$LED_PATH/led_sw_p_ctrl.$(printf '%02d' "$i")"
+		sleep_busy
+		echo 0x0 > "$LED_PATH/led_sw_p_ctrl.$(printf '%02d' "$i")"
+		sleep_busy
+	done
+
+	for i in $(seq 15 -2 1); do
+		echo 0x5 > "$LED_PATH/led_sw_p_ctrl.$(printf '%02d' "$i")"
+		sleep_busy
+		echo 0x0 > "$LED_PATH/led_sw_p_ctrl.$(printf '%02d' "$i")"
+		sleep_busy
+	done
+done

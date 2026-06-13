@@ -18,6 +18,7 @@ Current packages in this feed include:
 
 - `mstpd-ubus` - MSTP daemon with ubus integration,
 - `port-mirror-scripts` - UCI-managed tc-based port mirroring,
+- `rtl838x-switch-utils` - Utility scripts for RTL838x switch operation/testing,
 - `pn-scanner` - PROFINET device scanner,
 - `luci-app-rstp` - LuCI app for RSTP-related configuration/monitoring,
 - `luci-app-port-mirror` - LuCI app for port mirroring management,
